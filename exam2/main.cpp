@@ -12,7 +12,7 @@
 
 #include "magic_wand_model_data.h"
 #include "config.h"
-
+#include <string> 
 
 #include "tensorflow/lite/c/common.h"
 #include "tensorflow/lite/micro/kernels/micro_ops.h"
@@ -26,13 +26,22 @@
 
 #define PI 3.14159
  
+EventQueue queue(32 * EVENTS_EVENT_SIZE);
+//Thread qthread;
+//qthread.start(callback(&queue, &EventQueue::dispatch_forever));
+//Ticker ticker;
+//ticker.attach(queue.event(&blink), 1s);
 
-//uLCD_4DGL uLCD(D1, D0, D2);
+
+
 DigitalIn btn(USER_BUTTON);
 BufferedSerial pc(USBTX, USBRX);
 DigitalOut led1(LED1);
 DigitalOut led2(LED2);
 DigitalOut led3(LED3);
+uLCD_4DGL uLCD(D1, D0, D2); // serial tx, serial rx, reset pin;
+
+Thread capture_thread;
 
 Thread t1;
 Thread t2;
@@ -45,7 +54,7 @@ bool flag=true;
 struct Config config={64,{20, 10,250}};
 
 
-const char* host = "192.168.1.140";
+const char* host = "192.168.160.16";
 
 volatile int message_num = 0;
 volatile int arrivedcount = 0;
@@ -58,7 +67,7 @@ NetworkInterface* net = wifi;
 MQTTNetwork mqttNetwork(net);
 MQTT::Client<MQTTNetwork, Countdown> client(mqttNetwork);
 
-int choose=0;
+int gesture_id=0;
 
 /////////////////////////////////////tensorflow/////////////////////////////////////////////////////
 
@@ -212,7 +221,7 @@ int model_run(){
     // Produce an output
     if (gesture_index < label_num) {
       //error_reporter->Report(config.output_message[gesture_index]);
-       choose=gesture_index;
+       gesture_id=gesture_index;
     }
   }
 
@@ -226,7 +235,7 @@ int model_run(){
 
 //////////////////////////////////////MQTT/////////////////////////////////////////
 
-
+/*
 void messageArrived(MQTT::MessageData& md) {
     MQTT::Message &message = md.message;
     char msg[300];
@@ -238,15 +247,48 @@ void messageArrived(MQTT::MessageData& md) {
     printf(payload);
     ++arrivedcount;
 }
+*/
 
-
-
-
-void publish_message(MQTT::Client<MQTTNetwork, Countdown>* Client,int Angle) {
+//ticker.attach(&publish_message,3s);
+void publish_message(MQTT::Client<MQTTNetwork, Countdown>* Client,int ID) {
     message_num++;
     MQTT::Message message;
     char buff[100];
-    sprintf(buff, "message publish:%d",Angle);
+    sprintf(buff, "gesture_id:%d",ID);
+    message.qos = MQTT::QOS0;
+    message.retained = false;
+    message.dup = false;
+    message.payload = (void*) buff;
+    message.payloadlen = strlen(buff) + 1;
+    int rc = Client->publish(topic, message);
+
+    printf("rc:  %d\r\n", rc);
+    printf("Publish message: %s\r\n", buff);
+}
+
+void publish_message(MQTT::Client<MQTTNetwork, Countdown>* Client,int q;int over) {
+    message_num++;
+    MQTT::Message message;
+    char buff[100];
+    sprintf(buff, "%dth gesture over 30 degrees number:%d\n",q,over[q]);
+    message.qos = MQTT::QOS0;
+    message.retained = false;
+    message.dup = false;
+    message.payload = (void*) buff;
+    message.payloadlen = strlen(buff) + 1;
+    int rc = Client->publish(topic, message);
+
+    printf("rc:  %d\r\n", rc);
+    printf("Publish message: %s\r\n", buff);
+}
+
+void publish_message(MQTT::Client<MQTTNetwork, Countdown>* Client,float* x,float* y,float* z) {
+    
+    MQTT::Message message;
+    char buff[300];
+    for(short a=0;a<20;a++){
+      sprintf(buff+strlen(buff),"[%f,%f,%f] \n",x[a],y[a],z[a]);
+    }
     message.qos = MQTT::QOS0;
     message.retained = false;
     message.dup = false;
@@ -336,10 +378,14 @@ int connect_to_mqtt(){
 void gesture_ui(Arguments *in, Reply *out);
 void angle_detection(Arguments *in, Reply *out);
 void stop_gesture_ui(Arguments *in, Reply *out);
+void accelerator_capture_mode(Arguments *in, Reply *out);
 
 RPCFunction rpcfunc1(&gesture_ui, "gesture_ui");
 RPCFunction rpcfunc2(&angle_detection, "angle_detection");
-RPCFunction rpcfunc3(&stop_gesture_ui, "stop_ui_gesture");
+RPCFunction rpcfunc3(&stop_gesture_ui, "stop_gesture_ui");
+RPCFunction capture(&accelerator_capture_mode,"accelerator_capture_mode");
+
+
 
 
 
@@ -389,7 +435,6 @@ tt.start(connect_to_mqtt);
 
 
 
-
 void blink(){
     led2=0;
     led1=1;
@@ -401,23 +446,7 @@ void blink(){
     led2=1; //led2=1  ------------------->function is working right now
 }
 
-void select_threshold_angle(){
-    int selection[]={30,35,40};
-     
-    while(flag){
 
-        //using gesture to select threshold_angle and display on ulcd
-        
-        threshold_angle=selection[choose];
-        //printf("%d",selection[choose]);
-        if(!btn){
-            //publish the threshold_angle selected to MQTT broker
-            publish_message(&client,threshold_angle);
-           // break;
-        }
-        ThisThread::sleep_for(500ms);
-    }
-}
 
 void thread_func2(){
     int16_t pDataXYZ[3] = {0};
@@ -438,7 +467,7 @@ void thread_func2(){
         double temp=(sqrt(1-(angle_detect*angle_detect))/angle_detect);
         angle_detect = atan(temp)*180/PI;
         if(angle_detect>threshold_angle){
-            publish_message(&client,angle_detect); //ss<<angle_detect; ss.str();
+            publish_message(&client,angle_detect); 
             i++;
         }
         ThisThread::sleep_for(period);
@@ -448,29 +477,58 @@ void thread_func2(){
 
 
 
-void gesture_ui(Arguments *in, Reply *out){
-    blink();
-    t_model.start(model_run);
-    t1.start(select_threshold_angle);
-    
-    //t1.join();
-}
 
-void angle_detection(Arguments *in, Reply *out){
-    blink();
-    t2.start(thread_func2);
-    //t2.join():
-}
-
-
-void stop_gesture_ui(Arguments *in, Reply *out){
-    flag=false;
-}
 
 //////////////////////////rpc/////////////////////////
 
-/*
-void gesture_ui(Arguments *in, Reply *out){}
-void stop_gesture_ui(Arguments *in, Reply *out){}
-void angle_detection(Arguments *in, Reply *out){}
-*/
+float ref_x=0;float ref_y=0;float ref_z=0;
+int over[5]={0};
+
+void capture_function(){
+  int16_t pDataXYZ[3] = {0};
+  blink();
+  printf("measuring reference vector...\n");
+  ThisThread::sleep_for(500ms);
+  BSP_ACCELERO_AccGetXYZ(pDataXYZ);
+  ref_x=pDataXYZ[0];ref_y=pDataXYZ[1];ref_z=pDataXYZ[2];
+  printf("finish!\n");
+  blink();
+
+
+for(short q=0;q<5;q++){
+
+  float x[20],y[20],z[20];
+  int i=0;
+  printf("%dth gesture ,pls gesture!\n",q);
+  ThisThread::sleep_for(300ms);
+  while(i<20){
+    BSP_ACCELERO_AccGetXYZ(pDataXYZ);
+    x[i]=pDataXYZ[0];
+    y[i]=pDataXYZ[1];
+    z[i++]=pDataXYZ[2];
+  }
+
+    publish_message(&client,gesture_id);
+    uLCD.printf("ID:%d",gesture_id);
+
+    publish_message(&client,x,y,z);
+
+    for(short m=0;m<20;m++){
+      float angle_detect=x[m]*ref_x+y[m]*ref_y+z[m]*ref_z)/(sqrt(pow(ref_x,2)+pow(ref_y,2)+pow(ref_z,2))*sqrt(pow(x[m],2)+pow(y[m],2)+pow(z[m],2));
+      angle_detect=atan((sqrt(1-(angle_detect*angle_detect))/angle_detect))*180/PI;
+      if(angle_detect>30){
+        over[q]++;
+      }
+    }
+  
+}
+  for(short q=0;q<5;q++){
+    publish_message(&client,0,over[q]);
+  }
+}
+
+
+void accelerator_capture_mode(Arguments *in, Reply *out){
+  t_model.start(model_run);
+  capture_thread.start(capture_function);
+}

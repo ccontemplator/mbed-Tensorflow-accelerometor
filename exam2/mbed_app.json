@@ -2,11 +2,11 @@
     "config": {
     "wifi-ssid": {
             "help": "WiFi SSID",
-            "value": "\"3F WIFI\""
+            "value": "\"emlab\""
     },
     "wifi-password": {
             "help": "WiFi Password",
-            "value": "\"036675671\""
+            "value": "\"eenthu2405\""
     }
     },
     "target_overrides": {
