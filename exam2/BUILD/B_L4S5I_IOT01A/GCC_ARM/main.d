@@ -335,17 +335,17 @@ BUILD/B_L4S5I_IOT01A/GCC_ARM/main.o: main.cpp \
  4dgl-ulcd-se/uLCD_4DGL.h \
  /home/ee2405/ee2405/mbed-os/platform/include/platform/Stream.h \
  /home/ee2405/ee2405/mbed-os/platform/include/platform/FileLike.h \
- wifi_mqtt/MQTTNetwork.h \
+ python_code/MQTTNetwork.h \
  /home/ee2405/ee2405/mbed-os/connectivity/netsocket/include/netsocket/NetworkInterface.h \
- wifi_mqtt/MQTT/MQTTmbed.h wifi_mqtt/MQTT/MQTTClient.h \
- wifi_mqtt/MQTT/FP/FP.h wifi_mqtt/MQTT/MQTTPacket/MQTTPacket.h \
- wifi_mqtt/MQTT/MQTTPacket/MQTTConnect.h \
- wifi_mqtt/MQTT/MQTTPacket/MQTTPublish.h \
- wifi_mqtt/MQTT/MQTTPacket/MQTTSubscribe.h \
- wifi_mqtt/MQTT/MQTTPacket/MQTTUnsubscribe.h \
- wifi_mqtt/MQTT/MQTTPacket/MQTTFormat.h \
- wifi_mqtt/MQTT/MQTTPacket/StackTrace.h \
- wifi_mqtt/MQTT/MQTTPacket/MQTTPacket.h wifi_mqtt/MQTT/MQTTLogging.h \
+ python_code/MQTT/MQTTmbed.h python_code/MQTT/MQTTClient.h \
+ python_code/MQTT/FP/FP.h python_code/MQTT/MQTTPacket/MQTTPacket.h \
+ python_code/MQTT/MQTTPacket/MQTTConnect.h \
+ python_code/MQTT/MQTTPacket/MQTTPublish.h \
+ python_code/MQTT/MQTTPacket/MQTTSubscribe.h \
+ python_code/MQTT/MQTTPacket/MQTTUnsubscribe.h \
+ python_code/MQTT/MQTTPacket/MQTTFormat.h \
+ python_code/MQTT/MQTTPacket/StackTrace.h \
+ python_code/MQTT/MQTTPacket/MQTTPacket.h python_code/MQTT/MQTTLogging.h \
  accelerometer_handler.h tensorflowlite_mbed/tensorflow/lite/c/common.h \
  tensorflowlite_mbed/tensorflow/lite/micro/micro_error_reporter.h \
  tensorflowlite_mbed/tensorflow/lite/core/api/error_reporter.h \

@@ -43,6 +43,10 @@ uLCD_4DGL uLCD(D1, D0, D2); // serial tx, serial rx, reset pin;
 
 Thread capture_thread;
 
+float ref_x=0;float ref_y=0;float ref_z=0;
+int over[5]={0};
+
+
 Thread t1;
 Thread t2;
 Thread t_model;
@@ -266,11 +270,11 @@ void publish_message(MQTT::Client<MQTTNetwork, Countdown>* Client,int ID) {
     printf("Publish message: %s\r\n", buff);
 }
 
-void publish_message(MQTT::Client<MQTTNetwork, Countdown>* Client,int q;int over) {
+void publish_message(MQTT::Client<MQTTNetwork, Countdown>* Client,int q,int* over) {
     message_num++;
     MQTT::Message message;
     char buff[100];
-    sprintf(buff, "%dth gesture over 30 degrees number:%d\n",q,over[q]);
+    sprintf(buff, "%dth gesture has %d data over 30 degrees \n",q,over[q]);
     message.qos = MQTT::QOS0;
     message.retained = false;
     message.dup = false;
@@ -285,8 +289,8 @@ void publish_message(MQTT::Client<MQTTNetwork, Countdown>* Client,int q;int over
 void publish_message(MQTT::Client<MQTTNetwork, Countdown>* Client,float* x,float* y,float* z) {
     
     MQTT::Message message;
-    char buff[300];
-    for(short a=0;a<20;a++){
+    char buff[200];
+    for(short a=0;a<15;a++){
       sprintf(buff+strlen(buff),"[%f,%f,%f] \n",x[a],y[a],z[a]);
     }
     message.qos = MQTT::QOS0;
@@ -375,14 +379,12 @@ int connect_to_mqtt(){
 
 ///////////////////////RPCfunction//////////////////
 
-void gesture_ui(Arguments *in, Reply *out);
-void angle_detection(Arguments *in, Reply *out);
-void stop_gesture_ui(Arguments *in, Reply *out);
+
+void stop_capture(Arguments *in, Reply *out);
 void accelerator_capture_mode(Arguments *in, Reply *out);
 
-RPCFunction rpcfunc1(&gesture_ui, "gesture_ui");
-RPCFunction rpcfunc2(&angle_detection, "angle_detection");
-RPCFunction rpcfunc3(&stop_gesture_ui, "stop_gesture_ui");
+
+RPCFunction stop(&stop_capture, "stop_capture");
 RPCFunction capture(&accelerator_capture_mode,"accelerator_capture_mode");
 
 
@@ -447,88 +449,70 @@ void blink(){
 }
 
 
-
-void thread_func2(){
-    int16_t pDataXYZ[3] = {0};
-    float angle_detect=0;
-    int i=0;
-
-    int period=500;//(ms)
-    float ref_x=0;float ref_y=0;float ref_z=0;
-    blink();
-    //flag reference vector
-    BSP_ACCELERO_AccGetXYZ(pDataXYZ);
-    ref_x=pDataXYZ[0];ref_y=pDataXYZ[1];ref_z=pDataXYZ[2];
-    blink();
-    //ThisThread::sleep_for(100ms);
-    while(i<10){
-        BSP_ACCELERO_AccGetXYZ(pDataXYZ);
-        angle_detect=(pDataXYZ[0]*ref_x+pDataXYZ[1]*ref_y+pDataXYZ[2]*ref_z)/(sqrt(pow(ref_x,2)+pow(ref_y,2)+pow(ref_z,2))*sqrt(pow(pDataXYZ[0],2)+pow(pDataXYZ[1],2)+pow(pDataXYZ[2],2)));
-        double temp=(sqrt(1-(angle_detect*angle_detect))/angle_detect);
-        angle_detect = atan(temp)*180/PI;
-        if(angle_detect>threshold_angle){
-            publish_message(&client,angle_detect); 
-            i++;
-        }
-        ThisThread::sleep_for(period);
-    }
-
+int b=1;
+void callref(){
+  printf("measuring reference vector...\n");
 }
 
-
-
-
+void callgesture(){
+  printf("%dth gesture ,pls gesture!\n",b);
+  b++;
+} 
+void ulcdprint(){
+    uLCD.cls();
+    uLCD.printf("ID:%d",gesture_id);
+}
 
 //////////////////////////rpc/////////////////////////
 
-float ref_x=0;float ref_y=0;float ref_z=0;
-int over[5]={0};
-
 void capture_function(){
   int16_t pDataXYZ[3] = {0};
-  blink();
-  printf("measuring reference vector...\n");
-  ThisThread::sleep_for(500ms);
+  queue.call(&callref);
+  ThisThread::sleep_for(1s);
   BSP_ACCELERO_AccGetXYZ(pDataXYZ);
   ref_x=pDataXYZ[0];ref_y=pDataXYZ[1];ref_z=pDataXYZ[2];
-  printf("finish!\n");
   blink();
-
 
 for(short q=0;q<5;q++){
 
-  float x[20],y[20],z[20];
+  float x[15],y[15],z[15]; //we collect 15 data(vector) each gesture
   int i=0;
-  printf("%dth gesture ,pls gesture!\n",q);
-  ThisThread::sleep_for(300ms);
-  while(i<20){
+  queue.call(&callgesture);
+  ThisThread::sleep_for(1s);
+  while(i<15){
     BSP_ACCELERO_AccGetXYZ(pDataXYZ);
     x[i]=pDataXYZ[0];
     y[i]=pDataXYZ[1];
-    z[i++]=pDataXYZ[2];
+    z[i]=pDataXYZ[2];
+
+    float angle_detect=(x[i]*ref_x+y[i]*ref_y+z[i]*ref_z)/(sqrt(pow(ref_x,2)+pow(ref_y,2)+pow(ref_z,2))*sqrt(pow(x[i],2)+pow(y[i],2)+pow(z[i],2)));
+    angle_detect=atan((sqrt(1-(angle_detect*angle_detect))/angle_detect))*180/PI;
+    
+    if(angle_detect>30){
+      over[q]++;
+    }
+    i++;
+    ThisThread::sleep_for(700ms);
   }
 
-    publish_message(&client,gesture_id);
-    uLCD.printf("ID:%d",gesture_id);
-
-    publish_message(&client,x,y,z);
-
-    for(short m=0;m<20;m++){
-      float angle_detect=x[m]*ref_x+y[m]*ref_y+z[m]*ref_z)/(sqrt(pow(ref_x,2)+pow(ref_y,2)+pow(ref_z,2))*sqrt(pow(x[m],2)+pow(y[m],2)+pow(z[m],2));
-      angle_detect=atan((sqrt(1-(angle_detect*angle_detect))/angle_detect))*180/PI;
-      if(angle_detect>30){
-        over[q]++;
-      }
-    }
+    queue.call(&ulcdprint);
+    publish_message(&client,gesture_id); //publish the gesture id
+    publish_message(&client,x,y,z); //publish the gesture data
   
 }
+
   for(short q=0;q<5;q++){
-    publish_message(&client,0,over[q]);
+    publish_message(&client,q,over); //publish the number of data of each gesture over 30 degrees
   }
+
 }
 
 
 void accelerator_capture_mode(Arguments *in, Reply *out){
   t_model.start(model_run);
   capture_thread.start(capture_function);
+}
+
+void stop_capture(Arguments *in, Reply *out){
+  capture_thread.join();
 }
